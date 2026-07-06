@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>GZ — Agent Detection & Response</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #0a0d10;
+    --bg-panel: #12161b;
+    --bg-panel-raised: #171c22;
+    --border: #232a32;
+    --border-soft: #1a2027;
+    --text-primary: #e7ebee;
+    --text-secondary: #8b95a1;
+    --text-tertiary: #5c6570;
+    --accent-cyan: #3fc7c0;
+    --accent-cyan-dim: #1f6f6a;
+    --accent-amber: #e0a94c;
+    --accent-red: #e5484d;
+    --accent-red-dim: #4a2325;
+    --font-display: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-void);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-size: 14px;
+    line-height: 1.5;
+    direction: rtl;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .wrap { max-width: 1400px; margin: 0 auto; }
+
+  /* ===== HEADER ===== */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+
+  .brand { display: flex; align-items: center; gap: 14px; }
+
+  .brand-mark {
+    width: 38px; height: 38px;
+    border: 1.5px solid var(--accent-cyan);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--accent-cyan);
+    font-size: 15px;
+    position: relative;
+  }
+  .brand-mark::after {
+    content: '';
+    position: absolute; inset: -4px;
+    border: 1px solid var(--accent-cyan-dim);
+    border-radius: 11px;
+    animation: pulse-ring 3s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%, 100% { opacity: .3; transform: scale(1); }
+    50% { opacity: .9; transform: scale(1.06); }
+  }
+
+  .brand-text .title { font-weight: 700; font-size: 16px; letter-spacing: .02em; }
+  .brand-text .subtitle { color: var(--text-tertiary); font-size: 12px; margin-top: 1px; }
+
+  .header-status { display: flex; align-items: center; gap: 24px; }
+
+  .status-chip {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-cyan); flex-shrink: 0; }
+  .dot.live { animation: blink 1.8s ease-in-out infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  .mode-badge {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--accent-cyan-dim);
+    color: var(--accent-cyan);
+    background: rgba(63,199,192,0.06);
+  }
+
+  /* ===== GRID ===== */
+  .grid {
+    display: grid;
+    grid-template-columns: 2.1fr 1fr;
+    gap: 16px;
+  }
+
+  .col-left, .col-right { display: flex; flex-direction: column; gap: 16px; }
+
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .panel-head h2 {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .panel-head .meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-tertiary); }
+
+  /* ===== ACCOUNT STRIP ===== */
+  .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .stat-cell {
+    padding: 16px 20px;
+    border-left: 1px solid var(--border-soft);
+  }
+  .stat-cell:last-child { border-left: none; }
+  .stat-label { font-size: 11px; color: var(--text-tertiary); letter-spacing: .03em; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-family: var(--font-mono); font-size: 21px; font-weight: 600; }
+  .stat-value.up { color: var(--accent-cyan); }
+  .stat-delta { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-tertiary); margin-top: 3px; }
+
+  /* ===== LIVE FEED ===== */
+  .feed-list { max-height: 460px; overflow-y: auto; }
+  .feed-row {
+    display: grid;
+    grid-template-columns: 68px 1fr 90px 100px;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+  }
+  .feed-row:last-child { border-bottom: none; }
+  .feed-time { font-family: var(--font-mono); color: var(--text-tertiary); font-size: 11.5px; }
+  .feed-desc .sym { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); }
+  .feed-desc .action { color: var(--text-secondary); }
+  .feed-qty { font-family: var(--font-mono); color: var(--text-secondary); text-align: left; font-size: 12.5px; }
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .03em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-align: center;
+  }
+  .tag.ok { color: var(--accent-cyan); background: rgba(63,199,192,0.08); border: 1px solid var(--accent-cyan-dim); }
+  .tag.flag { color: var(--accent-amber); background: rgba(224,169,76,0.1); border: 1px solid rgba(224,169,76,0.35); }
+  .tag.blocked { color: var(--accent-red); background: rgba(229,72,77,0.1); border: 1px solid rgba(229,72,77,0.4); }
+
+  .feed-row.is-flag { background: rgba(224,169,76,0.04); }
+  .feed-row.is-blocked { background: rgba(229,72,77,0.05); }
+
+  /* ===== TRUST DIAL ===== */
+  .dial-wrap { padding: 22px 20px 20px; display: flex; flex-direction: column; align-items: center; }
+  .dial { position: relative; width: 156px; height: 156px; }
+  .dial svg { transform: rotate(-90deg); }
+  .dial-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .dial-num { font-family: var(--font-mono); font-size: 30px; font-weight: 700; color: var(--accent-cyan); }
+  .dial-sub { font-size: 10.5px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+  .dial-caption { margin-top: 14px; font-size: 12px; color: var(--text-secondary); text-align: center; max-width: 190px; }
+  .dial-caption b { color: var(--text-primary); font-weight: 600; }
+
+  /* ===== ALERTS ===== */
+  .alert-item {
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .alert-sev {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  }
+  .alert-sev.high { background: var(--accent-red); }
+  .alert-sev.med { background: var(--accent-amber); }
+  .alert-title { font-size: 12.5px; font-weight: 600; }
+  .alert-body { font-size: 12px; color: var(--text-secondary); margin-right: 14px; }
+  .alert-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-tertiary); margin-right: 14px; margin-top: 3px; }
+
+  /* ===== KILL SWITCH ===== */
+  .kill-panel { padding: 18px 20px; text-align: center; }
+  .kill-btn {
+    width: 100%;
+    padding: 14px;
+    background: rgba(229,72,77,0.08);
+    border: 1.5px solid var(--accent-red);
+    color: var(--accent-red);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .03em;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .15s ease, transform .1s ease;
+  }
+  .kill-btn:hover { background: rgba(229,72,77,0.16); }
+  .kill-btn:active { transform: scale(0.98); }
+  .kill-note { font-size: 11px; color: var(--text-tertiary); margin-top: 10px; line-height: 1.5; }
+
+  .kill-panel.tripped .kill-btn {
+    background: var(--accent-red);
+    color: #0a0d10;
+  }
+
+  /* ===== POSITIONS TABLE ===== */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: right;
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-weight: 500;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  td {
+    padding: 11px 18px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: var(--font-mono); }
+  .pos-up { color: var(--accent-cyan); }
+  .pos-down { color: var(--accent-red); }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .stat-strip { grid-template-columns: repeat(2, 1fr); }
+    .stat-cell:nth-child(2) { border-left: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="brand">
+      <div class="brand-mark">GZ</div>
+      <div class="brand-text">
+        <div class="title">GZ — Agent Detection &amp; Response</div>
+        <div class="subtitle">אג'נט: <span class="mono" id="agentName">momentum-agent-07</span> · חשבון: Alpaca Paper</div>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-chip"><span class="dot live"></span> מחובר · MCP Gateway פעיל</div>
+      <div class="mode-badge">מצב תצפית</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="stat-strip">
+      <div class="stat-cell">
+        <div class="stat-label">שווי חשבון</div>
+        <div class="stat-value" id="equity">$100,000.00</div>
+        <div class="stat-delta">מדומה · Paper Trading</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">כוח קנייה</div>
+        <div class="stat-value">$196,340.00</div>
+        <div class="stat-delta">מרג' סטנדרטי</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">הזמנות היום</div>
+        <div class="stat-value up" id="orderCount">14</div>
+        <div class="stat-delta">2 נחסמו · 1 בהמתנה לבדיקה</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">Uptime גייטוויי</div>
+        <div class="stat-value">02:14:37</div>
+        <div class="stat-delta">אפס latency נוסף שנמדד</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="col-left">
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>פיד חי — קריאות MCP</h2>
+          <div class="meta">ordered · newest first</div>
+        </div>
+        <div class="feed-list" id="feedList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>פוזיציות פתוחות</h2>
+          <div class="meta">3 סימבולים</div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>סימבול</th><th>כמות</th><th>מחיר ממוצע</th><th>מחיר נוכחי</th><th>P&amp;L</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono" style="font-weight:600;">NVDA</td>
+              <td class="mono">120</td>
+              <td class="mono">$187.40</td>
+              <td class="mono">$194.12</td>
+              <td class="mono pos-up">+$806.40</td>
+            </tr>
+            <tr>
+              <td class="mono" style="font-weight:600;">TSLA</td>
+              <td class="mono">45</td>
+              <td class="mono">$261.10</td>
+              <td class="mono">$254.88</td>
+              <td class="mono pos-down">-$279.90</td>
+            </tr>
+            <tr>
+              <td class="mono" style="font-weight:600;">SPY</td>
+              <td class="mono">300</td>
+              <td class="mono">$561.20</td>
+              <td class="mono">$563.05</td>
+              <td class="mono pos-up">+$555.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <div class="col-right">
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Agent DNA — ציון אמון</h2>
+        </div>
+        <div class="dial-wrap">
+          <div class="dial">
+            <svg width="156" height="156" viewBox="0 0 156 156">
+              <circle cx="78" cy="78" r="68" fill="none" stroke="#1a2027" stroke-width="10"/>
+              <circle id="dialArc" cx="78" cy="78" r="68" fill="none" stroke="#3fc7c0" stroke-width="10"
+                stroke-linecap="round" stroke-dasharray="427" stroke-dashoffset="90"/>
+            </svg>
+            <div class="dial-center">
+              <div class="dial-num">79</div>
+              <div class="dial-sub">/ 100</div>
+            </div>
+          </div>
+          <div class="dial-caption"><b>יציב.</b> ההתנהגות תואמת ל-baseline. סטייה קלה בתדירות הזמנות ב-SPY נצפית ב-14:02.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>התראות פעילות</h2>
+          <div class="meta">2 פתוחות</div>
+        </div>
+        <div>
+          <div class="alert-item">
+            <div class="alert-top"><span class="alert-sev high"></span><span class="alert-title">חריגת גודל פוזיציה</span></div>
+            <div class="alert-body">הוראה ל-TSLA בגודל 3.2× מהממוצע ההיסטורי של האג'נט. נחסמה אוטומטית ברמת gateway.</div>
+            <div class="alert-time">14:07:22</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-top"><span class="alert-sev med"></span><span class="alert-title">קצב ביטולים חריג</span></div>
+            <div class="alert-body">3 ביטולי הזמנה תוך 40 שניות — מתחת לסף חסימה, מסומן למעקב.</div>
+            <div class="alert-time">13:51:09</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel kill-panel" id="killPanel">
+        <button class="kill-btn" id="killBtn">⏻ KILL SWITCH — עצירה מיידית</button>
+        <div class="kill-note">עוצר את כל הוראות האג'נט מיידית ברמת ה-gateway, שומר פוזיציות קיימות. יעד תגובה: מתחת ל-50ms.</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const symbols = ['NVDA','TSLA','SPY','AAPL','MSFT','AMD'];
+  const actions = ['BUY','SELL'];
+  let orderCounter = 14;
+
+  function pad(n){ return n.toString().padStart(2,'0'); }
+  function nowStr(){
+    const d = new Date();
+    return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  }
+
+  function makeRow(status){
+    const sym = symbols[Math.floor(Math.random()*symbols.length)];
+    const action = actions[Math.floor(Math.random()*actions.length)];
+    const qty = Math.floor(Math.random()*150)+5;
+    const row = document.createElement('div');
+    row.className = 'feed-row' + (status==='flag' ? ' is-flag' : status==='blocked' ? ' is-blocked' : '');
+    const tagClass = status === 'ok' ? 'ok' : status === 'flag' ? 'flag' : 'blocked';
+    const tagText = status === 'ok' ? 'עבר' : status === 'flag' ? 'מסומן' : 'נחסם';
+    row.innerHTML = `
+      <div class="feed-time">${nowStr()}</div>
+      <div class="feed-desc"><span class="sym">${sym}</span> <span class="action">${action==='BUY'?'קניה':'מכירה'} · MCP place_order</span></div>
+      <div class="feed-qty">${qty} מניות</div>
+      <div class="tag ${tagClass}">${tagText}</div>
+    `;
+    return row;
+  }
+
+  const feedList = document.getElementById('feedList');
+  const initial = [
+    ['ok',0],['ok',0],['ok',0],['flag',0],['ok',0],['ok',0],
+    ['blocked',0],['ok',0],['ok',0],['ok',0],['flag',0],['ok',0]
+  ];
+  initial.forEach(([s]) => feedList.appendChild(makeRow(s)));
+
+  setInterval(() => {
+    const roll = Math.random();
+    const status = roll < 0.75 ? 'ok' : roll < 0.92 ? 'flag' : 'blocked';
+    feedList.insertBefore(makeRow(status), feedList.firstChild);
+    if (feedList.children.length > 30) feedList.removeChild(feedList.lastChild);
+    orderCounter++;
+    document.getElementById('orderCount').textContent = orderCounter;
+  }, 4000);
+
+  const killBtn = document.getElementById('killBtn');
+  const killPanel = document.getElementById('killPanel');
+  let tripped = false;
+  killBtn.addEventListener('click', () => {
+    tripped = !tripped;
+    killPanel.classList.toggle('tripped', tripped);
+    killBtn.textContent = tripped ? '⏻ אג\'נט הושבת — לחץ לשחרור' : '⏻ KILL SWITCH — עצירה מיידית';
+  });
+</script>
+</body>
+</html>
