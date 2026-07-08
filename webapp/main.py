@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -9,13 +8,6 @@ from pydantic import BaseModel
 import broker
 
 app = FastAPI(title="GZ Mock Broker")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -69,6 +61,14 @@ def api_cancel_order(order_id: str):
     return result
 
 
+@app.post("/api/orders/{order_id}/confirm")
+def api_confirm_order(order_id: str):
+    result = broker.confirm_order(order_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
 @app.get("/api/portfolio-history")
 def api_get_portfolio_history():
     return broker.get_portfolio_history()
@@ -77,6 +77,11 @@ def api_get_portfolio_history():
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/dashboard")
+def dashboard():
+    return FileResponse(STATIC_DIR / "dashboard.html")
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

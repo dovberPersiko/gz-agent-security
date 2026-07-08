@@ -103,6 +103,35 @@
   .side-tag.buy { color: var(--accent-cyan); background: rgba(63,199,192,0.1); }
   .side-tag.sell { color: var(--accent-red); background: rgba(229,72,77,0.1); }
   @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } .stat-strip { grid-template-columns: 1fr; } }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .overlay.open { display: flex; }
+  .fraud-modal {
+    width: 420px; max-width: 90vw; background: var(--bg-panel);
+    border: 1.5px solid var(--accent-red); border-radius: 12px; padding: 24px;
+  }
+  .fraud-modal .fraud-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .fraud-modal .fraud-icon {
+    width: 32px; height: 32px; border-radius: 50%; background: rgba(229,72,77,0.12);
+    color: var(--accent-red); display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-family: var(--font-mono); flex-shrink: 0;
+  }
+  .fraud-modal h3 { font-size: 15px; color: var(--accent-red); }
+  .fraud-modal p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }
+  .fraud-modal .order-detail {
+    font-family: var(--font-mono); font-size: 13.5px; background: var(--bg-panel-raised);
+    border-radius: 6px; padding: 12px 14px; margin-bottom: 18px;
+  }
+  .fraud-actions { display: flex; gap: 10px; }
+  .fraud-actions button {
+    flex: 1; padding: 11px; border-radius: 7px; font-family: var(--font-mono);
+    font-weight: 700; font-size: 13px; cursor: pointer; border: 1.5px solid transparent;
+  }
+  .fraud-approve { background: transparent; border-color: var(--border) !important; color: var(--text-secondary); }
+  .fraud-reject { background: var(--accent-red); color: #0a0d10; }
 </style>
 </head>
 <body>
@@ -115,7 +144,10 @@
         <div class="subtitle">חשבון מדומה · אין כסף אמיתי</div>
       </div>
     </div>
-    <div class="mode-badge">PAPER TRADING</div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div class="mode-badge">PAPER TRADING</div>
+      <a href="/dashboard" style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-cyan); text-decoration: none; border: 1px solid var(--accent-cyan-dim); border-radius: 6px; padding: 6px 10px;">→ דשבורד GZ</a>
+    </div>
   </div>
 
   <div class="stat-strip">
@@ -167,6 +199,21 @@
   </div>
 </div>
 
+<div class="overlay" id="fraudOverlay">
+  <div class="fraud-modal">
+    <div class="fraud-head">
+      <div class="fraud-icon">!</div>
+      <h3>חשש להונאה — נדרש אישור</h3>
+    </div>
+    <p>זוהתה הוראת קנייה בהיקף חריג (3 מניות ומעלה). לפי מדיניות GZ, ההוראה לא תבוצע ללא אישור ידני שלך.</p>
+    <div class="order-detail" id="fraudOrderDetail"></div>
+    <div class="fraud-actions">
+      <button class="fraud-reject" id="fraudReject">דחה הוראה</button>
+      <button class="fraud-approve" id="fraudApprove">אשר ובצע</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let selectedSide = 'buy';
   let symbols = [];
@@ -211,6 +258,10 @@
     }
   }
 
+  const STATUS_LABELS = {
+    filled: 'בוצע', rejected: 'נדחה', cancelled: 'בוטל', pending_confirmation: 'ממתין לאישור',
+  };
+
   async function refreshOrders() {
     const orders = await api('/orders');
     const body = document.getElementById('ordersBody');
@@ -227,7 +278,7 @@
         <td><span class="side-tag ${o.side}">${o.side === 'buy' ? 'קנייה' : 'מכירה'}</span></td>
         <td class="mono">${o.qty}</td>
         <td class="mono">${fmt(o.fill_price)}</td>
-        <td class="mono">${o.status}</td>
+        <td class="mono">${STATUS_LABELS[o.status] || o.status}</td>
       `;
       body.appendChild(row);
     }
@@ -269,22 +320,52 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({symbol, qty, side: selectedSide, order_type: 'market'})
       });
-      if (order.status === 'rejected') {
+      if (order.status === 'pending_confirmation') {
+        msgBox.className = 'msg';
+        msgBox.textContent = '';
+      } else if (order.status === 'rejected') {
         msgBox.className = 'msg err';
         msgBox.textContent = 'הפקודה נדחתה: ' + order.reason;
       } else {
         msgBox.className = 'msg ok';
         msgBox.textContent = `בוצע: ${selectedSide === 'buy' ? 'קניית' : 'מכירת'} ${qty} ${symbol} ב-${fmt(order.fill_price)}`;
       }
-      await Promise.all([refreshAccount(), refreshPositions(), refreshOrders(), refreshQuote()]);
+      await refreshAll();
     } catch (e) {
       msgBox.className = 'msg err';
       msgBox.textContent = e.message;
     }
   });
 
+  let fraudModalOrderId = null;
+  const fraudOverlay = document.getElementById('fraudOverlay');
+
+  async function checkPendingConfirmation() {
+    if (fraudModalOrderId) return;
+    const pending = await api('/orders?status=pending_confirmation');
+    if (!pending.length) return;
+    const order = pending[pending.length - 1];
+    fraudModalOrderId = order.id;
+    document.getElementById('fraudOrderDetail').textContent =
+      `${order.side === 'buy' ? 'קנייה' : 'מכירה'}: ${order.qty} ${order.symbol} ב-${fmt(order.fill_price)}`;
+    fraudOverlay.classList.add('open');
+  }
+
+  async function resolvePending(action) {
+    if (!fraudModalOrderId) return;
+    await api(`/orders/${fraudModalOrderId}/${action}`, { method: 'POST' });
+    fraudModalOrderId = null;
+    fraudOverlay.classList.remove('open');
+    await refreshAll();
+    await checkPendingConfirmation();
+  }
+
+  document.getElementById('fraudApprove').addEventListener('click', () => resolvePending('confirm'));
+  document.getElementById('fraudReject').addEventListener('click', () => resolvePending('cancel'));
+
   async function refreshAll() {
     await Promise.all([refreshAccount(), refreshPositions(), refreshOrders(), refreshQuote()]);
+    await checkPendingConfirmation();
   }
 
   loadSymbols().then(refreshAll);

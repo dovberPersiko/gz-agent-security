@@ -102,6 +102,17 @@
     background: rgba(63,199,192,0.06);
   }
 
+  .nav-link {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    border: 1px solid var(--accent-cyan-dim);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  .nav-link:hover { background: rgba(63,199,192,0.08); }
+
   /* ===== GRID ===== */
   .grid {
     display: grid;
@@ -204,6 +215,14 @@
   .alert-body { font-size: 12px; color: var(--text-secondary); margin-right: 14px; }
   .alert-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-tertiary); margin-right: 14px; margin-top: 3px; }
 
+  .pending-actions { display: flex; gap: 8px; margin-top: 10px; margin-right: 14px; }
+  .pending-actions button {
+    flex: 1; padding: 8px; border-radius: 6px; font-family: var(--font-mono);
+    font-size: 11.5px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent;
+  }
+  .pending-approve { background: transparent; border-color: var(--border) !important; color: var(--text-secondary); }
+  .pending-reject { background: var(--accent-red); color: #0a0d10; }
+
   /* ===== KILL SWITCH ===== */
   .kill-panel { padding: 18px 20px; text-align: center; }
   .kill-btn {
@@ -276,6 +295,7 @@
     <div class="header-status">
       <div class="status-chip"><span class="dot live"></span> מחובר · MCP Gateway פעיל</div>
       <div class="mode-badge">מצב תצפית</div>
+      <a class="nav-link" href="/">לאתר המסחר ←</a>
     </div>
   </div>
 
@@ -354,6 +374,16 @@
 
       <div class="panel">
         <div class="panel-head">
+          <h2>ממתין לאישורך — חשש להונאה</h2>
+          <div class="meta" id="pendingMeta">0</div>
+        </div>
+        <div id="pendingList">
+          <div class="alert-item"><div class="alert-body" style="text-align:center;">אין הוראות הממתינות לאישור</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
           <h2>התראות פעילות</h2>
           <div class="meta">2 פתוחות</div>
         </div>
@@ -382,8 +412,6 @@
 </div>
 
 <script>
-  const BROKER_API = 'https://gz-mock-broker.onrender.com';
-
   function fmt(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
   function pad(n){ return n.toString().padStart(2,'0'); }
   function timeStr(t){
@@ -392,7 +420,7 @@
   }
 
   async function api(path) {
-    const res = await fetch(BROKER_API + path);
+    const res = await fetch('/api' + path);
     if (!res.ok) throw new Error('api error: ' + path);
     return res.json();
   }
@@ -418,7 +446,7 @@
   let knownOrderIds = new Set();
 
   async function refreshFeed(){
-    const orders = await api('/api/orders');
+    const orders = await api('/orders');
     const newOnes = orders.filter(o => !knownOrderIds.has(o.id));
     newOnes.forEach(o => knownOrderIds.add(o.id));
     if (knownOrderIds.size === orders.length && feedList.children.length === 0) {
@@ -431,13 +459,13 @@
   }
 
   async function refreshAccount(){
-    const acc = await api('/api/account');
+    const acc = await api('/account');
     document.getElementById('equity').textContent = fmt(acc.equity);
     document.getElementById('buyingPower').textContent = fmt(acc.buying_power);
   }
 
   async function refreshPositions(){
-    const positions = await api('/api/positions');
+    const positions = await api('/positions');
     const body = document.getElementById('positionsBody');
     document.getElementById('positionsMeta').textContent = positions.length + ' סימבולים';
     body.innerHTML = '';
@@ -460,9 +488,39 @@
     }
   }
 
+  async function refreshPending(){
+    const pending = await api('/orders?status=pending_confirmation');
+    const list = document.getElementById('pendingList');
+    document.getElementById('pendingMeta').textContent = pending.length;
+    if (!pending.length) {
+      list.innerHTML = '<div class="alert-item"><div class="alert-body" style="text-align:center;">אין הוראות הממתינות לאישור</div></div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const o of pending) {
+      const item = document.createElement('div');
+      item.className = 'alert-item';
+      item.innerHTML = `
+        <div class="alert-top"><span class="alert-sev high"></span><span class="alert-title">${o.side === 'buy' ? 'קניית' : 'מכירת'} ${o.qty} ${o.symbol} — ${fmt(o.fill_price)} למניה</span></div>
+        <div class="alert-body">הוראה בהיקף חריג, ממתינה לאישור ידני לפני ביצוע.</div>
+        <div class="pending-actions">
+          <button class="pending-reject" data-id="${o.id}" data-action="cancel">דחה</button>
+          <button class="pending-approve" data-id="${o.id}" data-action="confirm">אשר ובצע</button>
+        </div>
+      `;
+      list.appendChild(item);
+    }
+    list.querySelectorAll('button[data-action]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await fetch(`/api/orders/${btn.dataset.id}/${btn.dataset.action}`, {method: 'POST'});
+        await Promise.all([refreshPending(), refreshAccount(), refreshPositions()]);
+      });
+    });
+  }
+
   async function refreshAll(){
     try {
-      await Promise.all([refreshAccount(), refreshPositions(), refreshFeed()]);
+      await Promise.all([refreshAccount(), refreshPositions(), refreshFeed(), refreshPending()]);
     } catch (e) {
       console.error(e);
     }
