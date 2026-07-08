@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mock-broker": {
+      "command": "uv",
+      "args": ["--directory", "mock-broker-mcp", "run", "server.py"],
+      "env": {
+        "BROKER_API_URL": "http://localhost:8000"
+      }
+    }
+  }
+}

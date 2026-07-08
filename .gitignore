@@ -1,0 +1,5 @@
+mock-broker-mcp/state.json
+mock-broker-mcp/.venv/
+webapp/data/
+webapp/.venv/
+__pycache__/

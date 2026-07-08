@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GZ Mock Broker — Paper Trading</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #0a0d10;
+    --bg-panel: #12161b;
+    --bg-panel-raised: #171c22;
+    --border: #232a32;
+    --border-soft: #1a2027;
+    --text-primary: #e7ebee;
+    --text-secondary: #8b95a1;
+    --text-tertiary: #5c6570;
+    --accent-cyan: #3fc7c0;
+    --accent-cyan-dim: #1f6f6a;
+    --accent-amber: #e0a94c;
+    --accent-red: #e5484d;
+    --accent-red-dim: #4a2325;
+    --font-display: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg-void);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-size: 14px;
+    line-height: 1.5;
+    direction: rtl;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 22px; background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    width: 38px; height: 38px; border: 1.5px solid var(--accent-cyan); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan); font-size: 15px;
+  }
+  .brand-text .title { font-weight: 700; font-size: 16px; letter-spacing: .02em; }
+  .brand-text .subtitle { color: var(--text-tertiary); font-size: 12px; margin-top: 1px; }
+  .mode-badge {
+    font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .04em;
+    padding: 5px 10px; border-radius: 5px; border: 1px solid var(--accent-cyan-dim);
+    color: var(--accent-cyan); background: rgba(63,199,192,0.06);
+  }
+  .stat-strip { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; }
+  .stat-cell { padding: 16px 20px; border-left: 1px solid var(--border-soft); }
+  .stat-cell:last-child { border-left: none; }
+  .stat-label { font-size: 11px; color: var(--text-tertiary); letter-spacing: .03em; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-family: var(--font-mono); font-size: 21px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; }
+  .panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); }
+  .panel-head h2 { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); letter-spacing: .04em; text-transform: uppercase; }
+  .panel-body { padding: 18px; }
+  label { display: block; font-size: 11.5px; color: var(--text-tertiary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .03em; }
+  select, input {
+    width: 100%; background: var(--bg-panel-raised); border: 1px solid var(--border);
+    color: var(--text-primary); padding: 10px 12px; border-radius: 6px; font-family: var(--font-mono);
+    font-size: 13.5px; margin-bottom: 14px;
+  }
+  .side-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+  .side-btn {
+    flex: 1; padding: 10px; border-radius: 6px; border: 1.5px solid var(--border);
+    background: var(--bg-panel-raised); color: var(--text-secondary); font-family: var(--font-mono);
+    font-weight: 600; cursor: pointer; transition: all .12s ease;
+  }
+  .side-btn.active.buy { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(63,199,192,0.08); }
+  .side-btn.active.sell { border-color: var(--accent-red); color: var(--accent-red); background: rgba(229,72,77,0.08); }
+  .quote-line { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 10px 12px; background: var(--bg-panel-raised); border-radius: 6px; }
+  .quote-line .sym { font-family: var(--font-mono); font-weight: 700; }
+  .quote-line .px { font-family: var(--font-mono); color: var(--accent-cyan); font-size: 16px; }
+  .submit-btn {
+    width: 100%; padding: 13px; border-radius: 8px; border: none; cursor: pointer;
+    font-family: var(--font-mono); font-weight: 700; font-size: 13.5px; letter-spacing: .03em;
+    background: var(--accent-cyan); color: #0a0d10; transition: opacity .12s ease;
+  }
+  .submit-btn:hover { opacity: .85; }
+  .submit-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .msg { margin-top: 12px; font-size: 12.5px; padding: 10px 12px; border-radius: 6px; display: none; }
+  .msg.ok { display: block; color: var(--accent-cyan); background: rgba(63,199,192,0.08); border: 1px solid var(--accent-cyan-dim); }
+  .msg.err { display: block; color: var(--accent-red); background: rgba(229,72,77,0.08); border: 1px solid var(--accent-red-dim); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: right; font-size: 10.5px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .03em; font-weight: 500; padding: 10px 18px; border-bottom: 1px solid var(--border-soft); }
+  td { padding: 11px 18px; font-size: 13px; border-bottom: 1px solid var(--border-soft); }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: var(--font-mono); }
+  .pos-up { color: var(--accent-cyan); }
+  .pos-down { color: var(--accent-red); }
+  .empty-row td { color: var(--text-tertiary); text-align: center; padding: 20px; }
+  .side-tag { font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+  .side-tag.buy { color: var(--accent-cyan); background: rgba(63,199,192,0.1); }
+  .side-tag.sell { color: var(--accent-red); background: rgba(229,72,77,0.1); }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } .stat-strip { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="brand">
+      <div class="brand-mark">GZ</div>
+      <div class="brand-text">
+        <div class="title">GZ Mock Broker</div>
+        <div class="subtitle">חשבון מדומה · אין כסף אמיתי</div>
+      </div>
+    </div>
+    <div class="mode-badge">PAPER TRADING</div>
+  </div>
+
+  <div class="stat-strip">
+    <div class="stat-cell"><div class="stat-label">שווי חשבון</div><div class="stat-value" id="equity">—</div></div>
+    <div class="stat-cell"><div class="stat-label">מזומן פנוי</div><div class="stat-value" id="cash">—</div></div>
+    <div class="stat-cell"><div class="stat-label">כוח קנייה</div><div class="stat-value" id="buyingPower">—</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-head"><h2>ביצוע פקודה</h2></div>
+      <div class="panel-body">
+        <label>סימבול</label>
+        <select id="symbolSelect"></select>
+
+        <div class="quote-line">
+          <span class="sym" id="quoteSym">—</span>
+          <span class="px" id="quotePx">—</span>
+        </div>
+
+        <div class="side-toggle">
+          <button class="side-btn active buy" id="buyBtn" data-side="buy">קנייה</button>
+          <button class="side-btn sell" id="sellBtn" data-side="sell">מכירה</button>
+        </div>
+
+        <label>כמות</label>
+        <input type="number" id="qtyInput" min="1" step="1" value="10">
+
+        <button class="submit-btn" id="submitBtn">בצע פקודה</button>
+        <div class="msg" id="msgBox"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>פוזיציות פתוחות</h2></div>
+      <table>
+        <thead><tr><th>סימבול</th><th>כמות</th><th>מחיר ממוצע</th><th>מחיר נוכחי</th><th>P&amp;L</th></tr></thead>
+        <tbody id="positionsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>היסטוריית פקודות</h2></div>
+    <table>
+      <thead><tr><th>זמן</th><th>סימבול</th><th>כיוון</th><th>כמות</th><th>מחיר ביצוע</th><th>סטטוס</th></tr></thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  let selectedSide = 'buy';
+  let symbols = [];
+
+  function fmt(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  function fmtTime(t) { const d = new Date(t * 1000); return d.toLocaleTimeString('he-IL'); }
+
+  async function api(path, opts) {
+    const res = await fetch('/api' + path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'שגיאה');
+    return data;
+  }
+
+  async function refreshAccount() {
+    const acc = await api('/account');
+    document.getElementById('equity').textContent = fmt(acc.equity);
+    document.getElementById('cash').textContent = fmt(acc.cash);
+    document.getElementById('buyingPower').textContent = fmt(acc.buying_power);
+  }
+
+  async function refreshPositions() {
+    const positions = await api('/positions');
+    const body = document.getElementById('positionsBody');
+    body.innerHTML = '';
+    if (!positions.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="5">אין פוזיציות פתוחות</td></tr>';
+      return;
+    }
+    for (const p of positions) {
+      const pl = p.unrealized_pl >= 0 ? 'pos-up' : 'pos-down';
+      const sign = p.unrealized_pl >= 0 ? '+' : '';
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="mono" style="font-weight:600;">${p.symbol}</td>
+        <td class="mono">${p.qty}</td>
+        <td class="mono">${fmt(p.avg_entry_price)}</td>
+        <td class="mono">${fmt(p.current_price)}</td>
+        <td class="mono ${pl}">${sign}${fmt(p.unrealized_pl)}</td>
+      `;
+      body.appendChild(row);
+    }
+  }
+
+  async function refreshOrders() {
+    const orders = await api('/orders');
+    const body = document.getElementById('ordersBody');
+    body.innerHTML = '';
+    if (!orders.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">אין פקודות עדיין</td></tr>';
+      return;
+    }
+    for (const o of orders.slice(0, 20)) {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="mono">${fmtTime(o.submitted_at)}</td>
+        <td class="mono" style="font-weight:600;">${o.symbol}</td>
+        <td><span class="side-tag ${o.side}">${o.side === 'buy' ? 'קנייה' : 'מכירה'}</span></td>
+        <td class="mono">${o.qty}</td>
+        <td class="mono">${fmt(o.fill_price)}</td>
+        <td class="mono">${o.status}</td>
+      `;
+      body.appendChild(row);
+    }
+  }
+
+  async function refreshQuote() {
+    const sym = document.getElementById('symbolSelect').value;
+    if (!sym) return;
+    const q = await api('/quote/' + sym);
+    document.getElementById('quoteSym').textContent = q.symbol;
+    document.getElementById('quotePx').textContent = fmt(q.price);
+  }
+
+  async function loadSymbols() {
+    symbols = await api('/symbols');
+    const sel = document.getElementById('symbolSelect');
+    sel.innerHTML = symbols.map(s => `<option value="${s}">${s}</option>`).join('');
+    refreshQuote();
+  }
+
+  document.getElementById('symbolSelect').addEventListener('change', refreshQuote);
+
+  document.getElementById('buyBtn').addEventListener('click', () => setSide('buy'));
+  document.getElementById('sellBtn').addEventListener('click', () => setSide('sell'));
+  function setSide(side) {
+    selectedSide = side;
+    document.getElementById('buyBtn').classList.toggle('active', side === 'buy');
+    document.getElementById('sellBtn').classList.toggle('active', side === 'sell');
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', async () => {
+    const symbol = document.getElementById('symbolSelect').value;
+    const qty = Number(document.getElementById('qtyInput').value);
+    const msgBox = document.getElementById('msgBox');
+    msgBox.className = 'msg';
+    try {
+      const order = await api('/orders', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({symbol, qty, side: selectedSide, order_type: 'market'})
+      });
+      if (order.status === 'rejected') {
+        msgBox.className = 'msg err';
+        msgBox.textContent = 'הפקודה נדחתה: ' + order.reason;
+      } else {
+        msgBox.className = 'msg ok';
+        msgBox.textContent = `בוצע: ${selectedSide === 'buy' ? 'קניית' : 'מכירת'} ${qty} ${symbol} ב-${fmt(order.fill_price)}`;
+      }
+      await Promise.all([refreshAccount(), refreshPositions(), refreshOrders(), refreshQuote()]);
+    } catch (e) {
+      msgBox.className = 'msg err';
+      msgBox.textContent = e.message;
+    }
+  });
+
+  async function refreshAll() {
+    await Promise.all([refreshAccount(), refreshPositions(), refreshOrders(), refreshQuote()]);
+  }
+
+  loadSymbols().then(refreshAll);
+  setInterval(refreshAll, 5000);
+</script>
+</body>
+</html>
