@@ -74,6 +74,11 @@ def api_get_portfolio_history():
     return broker.get_portfolio_history()
 
 
+@app.get("/api/agent-dna")
+def api_get_agent_dna():
+    return broker.get_agent_dna()
+
+
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")

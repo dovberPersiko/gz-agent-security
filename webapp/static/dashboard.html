@@ -364,11 +364,11 @@
                 stroke-linecap="round" stroke-dasharray="427" stroke-dashoffset="90"/>
             </svg>
             <div class="dial-center">
-              <div class="dial-num">79</div>
+              <div class="dial-num" id="dnaScore">—</div>
               <div class="dial-sub">/ 100</div>
             </div>
           </div>
-          <div class="dial-caption"><b>יציב.</b> ההתנהגות תואמת ל-baseline. סטייה קלה בתדירות הזמנות ב-SPY נצפית ב-14:02.</div>
+          <div class="dial-caption"><b id="dnaLabel"></b> <span id="dnaCaption"></span></div>
         </div>
       </div>
 
@@ -518,9 +518,23 @@
     });
   }
 
+  const DIAL_CIRCUMFERENCE = 427;
+
+  async function refreshAgentDna(){
+    const dna = await api('/agent-dna');
+    document.getElementById('dnaScore').textContent = dna.score;
+    document.getElementById('dnaLabel').textContent = dna.label + '.';
+    document.getElementById('dnaCaption').textContent = dna.caption;
+    const offset = DIAL_CIRCUMFERENCE * (1 - dna.score / 100);
+    document.getElementById('dialArc').setAttribute('stroke-dashoffset', offset);
+    const arcColor = dna.score >= 80 ? '#3fc7c0' : dna.score >= 50 ? '#e0a94c' : '#e5484d';
+    document.getElementById('dialArc').setAttribute('stroke', arcColor);
+    document.getElementById('dnaScore').style.color = arcColor;
+  }
+
   async function refreshAll(){
     try {
-      await Promise.all([refreshAccount(), refreshPositions(), refreshFeed(), refreshPending()]);
+      await Promise.all([refreshAccount(), refreshPositions(), refreshFeed(), refreshPending(), refreshAgentDna()]);
     } catch (e) {
       console.error(e);
     }
