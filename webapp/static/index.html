@@ -91,6 +91,7 @@
   .msg { margin-top: 12px; font-size: 12.5px; padding: 10px 12px; border-radius: 6px; display: none; }
   .msg.ok { display: block; color: var(--accent-cyan); background: rgba(63,199,192,0.08); border: 1px solid var(--accent-cyan-dim); }
   .msg.err { display: block; color: var(--accent-red); background: rgba(229,72,77,0.08); border: 1px solid var(--accent-red-dim); }
+  .msg.info { display: block; color: var(--accent-amber); background: rgba(224,169,76,0.1); border: 1px solid rgba(224,169,76,0.35); }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: right; font-size: 10.5px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .03em; font-weight: 500; padding: 10px 18px; border-bottom: 1px solid var(--border-soft); }
   td { padding: 11px 18px; font-size: 13px; border-bottom: 1px solid var(--border-soft); }
@@ -103,35 +104,6 @@
   .side-tag.buy { color: var(--accent-cyan); background: rgba(63,199,192,0.1); }
   .side-tag.sell { color: var(--accent-red); background: rgba(229,72,77,0.1); }
   @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } .stat-strip { grid-template-columns: 1fr; } }
-
-  .overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-    display: none; align-items: center; justify-content: center; z-index: 100;
-  }
-  .overlay.open { display: flex; }
-  .fraud-modal {
-    width: 420px; max-width: 90vw; background: var(--bg-panel);
-    border: 1.5px solid var(--accent-red); border-radius: 12px; padding: 24px;
-  }
-  .fraud-modal .fraud-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-  .fraud-modal .fraud-icon {
-    width: 32px; height: 32px; border-radius: 50%; background: rgba(229,72,77,0.12);
-    color: var(--accent-red); display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-family: var(--font-mono); flex-shrink: 0;
-  }
-  .fraud-modal h3 { font-size: 15px; color: var(--accent-red); }
-  .fraud-modal p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }
-  .fraud-modal .order-detail {
-    font-family: var(--font-mono); font-size: 13.5px; background: var(--bg-panel-raised);
-    border-radius: 6px; padding: 12px 14px; margin-bottom: 18px;
-  }
-  .fraud-actions { display: flex; gap: 10px; }
-  .fraud-actions button {
-    flex: 1; padding: 11px; border-radius: 7px; font-family: var(--font-mono);
-    font-weight: 700; font-size: 13px; cursor: pointer; border: 1.5px solid transparent;
-  }
-  .fraud-approve { background: transparent; border-color: var(--border) !important; color: var(--text-secondary); }
-  .fraud-reject { background: var(--accent-red); color: #0a0d10; }
 </style>
 </head>
 <body>
@@ -196,21 +168,6 @@
       <thead><tr><th>זמן</th><th>סימבול</th><th>כיוון</th><th>כמות</th><th>מחיר ביצוע</th><th>סטטוס</th></tr></thead>
       <tbody id="ordersBody"></tbody>
     </table>
-  </div>
-</div>
-
-<div class="overlay" id="fraudOverlay">
-  <div class="fraud-modal">
-    <div class="fraud-head">
-      <div class="fraud-icon">!</div>
-      <h3>חשש להונאה — נדרש אישור</h3>
-    </div>
-    <p>זוהתה הוראת קנייה בהיקף חריג (3 מניות ומעלה). לפי מדיניות GZ, ההוראה לא תבוצע ללא אישור ידני שלך.</p>
-    <div class="order-detail" id="fraudOrderDetail"></div>
-    <div class="fraud-actions">
-      <button class="fraud-reject" id="fraudReject">דחה הוראה</button>
-      <button class="fraud-approve" id="fraudApprove">אשר ובצע</button>
-    </div>
   </div>
 </div>
 
@@ -321,8 +278,8 @@
         body: JSON.stringify({symbol, qty, side: selectedSide, order_type: 'market'})
       });
       if (order.status === 'pending_confirmation') {
-        msgBox.className = 'msg';
-        msgBox.textContent = '';
+        msgBox.className = 'msg info';
+        msgBox.textContent = 'ההוראה ממתינה לאישור ידני בדשבורד GZ לפני ביצוע.';
       } else if (order.status === 'rejected') {
         msgBox.className = 'msg err';
         msgBox.textContent = 'הפקודה נדחתה: ' + order.reason;
@@ -337,35 +294,8 @@
     }
   });
 
-  let fraudModalOrderId = null;
-  const fraudOverlay = document.getElementById('fraudOverlay');
-
-  async function checkPendingConfirmation() {
-    if (fraudModalOrderId) return;
-    const pending = await api('/orders?status=pending_confirmation');
-    if (!pending.length) return;
-    const order = pending[pending.length - 1];
-    fraudModalOrderId = order.id;
-    document.getElementById('fraudOrderDetail').textContent =
-      `${order.side === 'buy' ? 'קנייה' : 'מכירה'}: ${order.qty} ${order.symbol} ב-${fmt(order.fill_price)}`;
-    fraudOverlay.classList.add('open');
-  }
-
-  async function resolvePending(action) {
-    if (!fraudModalOrderId) return;
-    await api(`/orders/${fraudModalOrderId}/${action}`, { method: 'POST' });
-    fraudModalOrderId = null;
-    fraudOverlay.classList.remove('open');
-    await refreshAll();
-    await checkPendingConfirmation();
-  }
-
-  document.getElementById('fraudApprove').addEventListener('click', () => resolvePending('confirm'));
-  document.getElementById('fraudReject').addEventListener('click', () => resolvePending('cancel'));
-
   async function refreshAll() {
     await Promise.all([refreshAccount(), refreshPositions(), refreshOrders(), refreshQuote()]);
-    await checkPendingConfirmation();
   }
 
   loadSymbols().then(refreshAll);
