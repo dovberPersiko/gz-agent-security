@@ -270,7 +270,7 @@
       <div class="brand-mark">GZ</div>
       <div class="brand-text">
         <div class="title">GZ — Agent Detection &amp; Response</div>
-        <div class="subtitle">אג'נט: <span class="mono" id="agentName">momentum-agent-07</span> · חשבון: Alpaca Paper</div>
+        <div class="subtitle">אג'נט: <span class="mono" id="agentName">momentum-agent-07</span> · חשבון: GZ Mock Broker</div>
       </div>
     </div>
     <div class="header-status">
@@ -283,17 +283,17 @@
     <div class="stat-strip">
       <div class="stat-cell">
         <div class="stat-label">שווי חשבון</div>
-        <div class="stat-value" id="equity">$100,000.00</div>
+        <div class="stat-value" id="equity">—</div>
         <div class="stat-delta">מדומה · Paper Trading</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">כוח קנייה</div>
-        <div class="stat-value">$196,340.00</div>
+        <div class="stat-value" id="buyingPower">—</div>
         <div class="stat-delta">מרג' סטנדרטי</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">הזמנות היום</div>
-        <div class="stat-value up" id="orderCount">14</div>
+        <div class="stat-value up" id="orderCount">—</div>
         <div class="stat-delta">2 נחסמו · 1 בהמתנה לבדיקה</div>
       </div>
       <div class="stat-cell">
@@ -318,35 +318,13 @@
       <div class="panel">
         <div class="panel-head">
           <h2>פוזיציות פתוחות</h2>
-          <div class="meta">3 סימבולים</div>
+          <div class="meta" id="positionsMeta">—</div>
         </div>
         <table>
           <thead>
             <tr><th>סימבול</th><th>כמות</th><th>מחיר ממוצע</th><th>מחיר נוכחי</th><th>P&amp;L</th></tr>
           </thead>
-          <tbody>
-            <tr>
-              <td class="mono" style="font-weight:600;">NVDA</td>
-              <td class="mono">120</td>
-              <td class="mono">$187.40</td>
-              <td class="mono">$194.12</td>
-              <td class="mono pos-up">+$806.40</td>
-            </tr>
-            <tr>
-              <td class="mono" style="font-weight:600;">TSLA</td>
-              <td class="mono">45</td>
-              <td class="mono">$261.10</td>
-              <td class="mono">$254.88</td>
-              <td class="mono pos-down">-$279.90</td>
-            </tr>
-            <tr>
-              <td class="mono" style="font-weight:600;">SPY</td>
-              <td class="mono">300</td>
-              <td class="mono">$561.20</td>
-              <td class="mono">$563.05</td>
-              <td class="mono pos-up">+$555.00</td>
-            </tr>
-          </tbody>
+          <tbody id="positionsBody"></tbody>
         </table>
       </div>
 
@@ -404,48 +382,94 @@
 </div>
 
 <script>
-  const symbols = ['NVDA','TSLA','SPY','AAPL','MSFT','AMD'];
-  const actions = ['BUY','SELL'];
-  let orderCounter = 14;
+  const BROKER_API = 'https://gz-mock-broker.onrender.com';
 
+  function fmt(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
   function pad(n){ return n.toString().padStart(2,'0'); }
-  function nowStr(){
-    const d = new Date();
+  function timeStr(t){
+    const d = new Date(t * 1000);
     return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
   }
 
-  function makeRow(status){
-    const sym = symbols[Math.floor(Math.random()*symbols.length)];
-    const action = actions[Math.floor(Math.random()*actions.length)];
-    const qty = Math.floor(Math.random()*150)+5;
+  async function api(path) {
+    const res = await fetch(BROKER_API + path);
+    if (!res.ok) throw new Error('api error: ' + path);
+    return res.json();
+  }
+
+  function makeRow(order){
+    // status tagging is illustrative — real anomaly detection is a later GZ phase, not wired up yet
+    const roll = Math.random();
+    const status = roll < 0.85 ? 'ok' : roll < 0.96 ? 'flag' : 'blocked';
     const row = document.createElement('div');
     row.className = 'feed-row' + (status==='flag' ? ' is-flag' : status==='blocked' ? ' is-blocked' : '');
     const tagClass = status === 'ok' ? 'ok' : status === 'flag' ? 'flag' : 'blocked';
     const tagText = status === 'ok' ? 'עבר' : status === 'flag' ? 'מסומן' : 'נחסם';
     row.innerHTML = `
-      <div class="feed-time">${nowStr()}</div>
-      <div class="feed-desc"><span class="sym">${sym}</span> <span class="action">${action==='BUY'?'קניה':'מכירה'} · MCP place_order</span></div>
-      <div class="feed-qty">${qty} מניות</div>
+      <div class="feed-time">${timeStr(order.submitted_at)}</div>
+      <div class="feed-desc"><span class="sym">${order.symbol}</span> <span class="action">${order.side==='buy'?'קניה':'מכירה'} · MCP place_order</span></div>
+      <div class="feed-qty">${order.qty} מניות</div>
       <div class="tag ${tagClass}">${tagText}</div>
     `;
     return row;
   }
 
   const feedList = document.getElementById('feedList');
-  const initial = [
-    ['ok',0],['ok',0],['ok',0],['flag',0],['ok',0],['ok',0],
-    ['blocked',0],['ok',0],['ok',0],['ok',0],['flag',0],['ok',0]
-  ];
-  initial.forEach(([s]) => feedList.appendChild(makeRow(s)));
+  let knownOrderIds = new Set();
 
-  setInterval(() => {
-    const roll = Math.random();
-    const status = roll < 0.75 ? 'ok' : roll < 0.92 ? 'flag' : 'blocked';
-    feedList.insertBefore(makeRow(status), feedList.firstChild);
-    if (feedList.children.length > 30) feedList.removeChild(feedList.lastChild);
-    orderCounter++;
-    document.getElementById('orderCount').textContent = orderCounter;
-  }, 4000);
+  async function refreshFeed(){
+    const orders = await api('/api/orders');
+    const newOnes = orders.filter(o => !knownOrderIds.has(o.id));
+    newOnes.forEach(o => knownOrderIds.add(o.id));
+    if (knownOrderIds.size === orders.length && feedList.children.length === 0) {
+      orders.slice(0, 30).forEach(o => feedList.appendChild(makeRow(o)));
+    } else {
+      newOnes.reverse().forEach(o => feedList.insertBefore(makeRow(o), feedList.firstChild));
+    }
+    while (feedList.children.length > 30) feedList.removeChild(feedList.lastChild);
+    document.getElementById('orderCount').textContent = orders.length;
+  }
+
+  async function refreshAccount(){
+    const acc = await api('/api/account');
+    document.getElementById('equity').textContent = fmt(acc.equity);
+    document.getElementById('buyingPower').textContent = fmt(acc.buying_power);
+  }
+
+  async function refreshPositions(){
+    const positions = await api('/api/positions');
+    const body = document.getElementById('positionsBody');
+    document.getElementById('positionsMeta').textContent = positions.length + ' סימבולים';
+    body.innerHTML = '';
+    if (!positions.length) {
+      body.innerHTML = '<tr><td colspan="5" class="mono" style="text-align:center;color:var(--text-tertiary);">אין פוזיציות פתוחות</td></tr>';
+      return;
+    }
+    for (const p of positions) {
+      const plClass = p.unrealized_pl >= 0 ? 'pos-up' : 'pos-down';
+      const sign = p.unrealized_pl >= 0 ? '+' : '';
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="mono" style="font-weight:600;">${p.symbol}</td>
+        <td class="mono">${p.qty}</td>
+        <td class="mono">${fmt(p.avg_entry_price)}</td>
+        <td class="mono">${fmt(p.current_price)}</td>
+        <td class="mono ${plClass}">${sign}${fmt(p.unrealized_pl)}</td>
+      `;
+      body.appendChild(row);
+    }
+  }
+
+  async function refreshAll(){
+    try {
+      await Promise.all([refreshAccount(), refreshPositions(), refreshFeed()]);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  refreshAll();
+  setInterval(refreshAll, 5000);
 
   const killBtn = document.getElementById('killBtn');
   const killPanel = document.getElementById('killPanel');
