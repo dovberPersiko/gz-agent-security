@@ -102,6 +102,17 @@
     background: rgba(63,199,192,0.06);
   }
 
+  .nav-link {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    border: 1px solid var(--accent-cyan-dim);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  .nav-link:hover { background: rgba(63,199,192,0.08); }
+
   /* ===== GRID ===== */
   .grid {
     display: grid;
@@ -284,6 +295,7 @@
     <div class="header-status">
       <div class="status-chip"><span class="dot live"></span> מחובר · MCP Gateway פעיל</div>
       <div class="mode-badge">מצב תצפית</div>
+      <a class="nav-link" href="/">לאתר המסחר ←</a>
     </div>
   </div>
 
@@ -400,8 +412,6 @@
 </div>
 
 <script>
-  const BROKER_API = 'https://gz-mock-broker.onrender.com';
-
   function fmt(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
   function pad(n){ return n.toString().padStart(2,'0'); }
   function timeStr(t){
@@ -410,7 +420,7 @@
   }
 
   async function api(path) {
-    const res = await fetch(BROKER_API + path);
+    const res = await fetch('/api' + path);
     if (!res.ok) throw new Error('api error: ' + path);
     return res.json();
   }
@@ -436,7 +446,7 @@
   let knownOrderIds = new Set();
 
   async function refreshFeed(){
-    const orders = await api('/api/orders');
+    const orders = await api('/orders');
     const newOnes = orders.filter(o => !knownOrderIds.has(o.id));
     newOnes.forEach(o => knownOrderIds.add(o.id));
     if (knownOrderIds.size === orders.length && feedList.children.length === 0) {
@@ -449,13 +459,13 @@
   }
 
   async function refreshAccount(){
-    const acc = await api('/api/account');
+    const acc = await api('/account');
     document.getElementById('equity').textContent = fmt(acc.equity);
     document.getElementById('buyingPower').textContent = fmt(acc.buying_power);
   }
 
   async function refreshPositions(){
-    const positions = await api('/api/positions');
+    const positions = await api('/positions');
     const body = document.getElementById('positionsBody');
     document.getElementById('positionsMeta').textContent = positions.length + ' סימבולים';
     body.innerHTML = '';
@@ -479,7 +489,7 @@
   }
 
   async function refreshPending(){
-    const pending = await api('/api/orders?status=pending_confirmation');
+    const pending = await api('/orders?status=pending_confirmation');
     const list = document.getElementById('pendingList');
     document.getElementById('pendingMeta').textContent = pending.length;
     if (!pending.length) {
@@ -502,7 +512,7 @@
     }
     list.querySelectorAll('button[data-action]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await fetch(`${BROKER_API}/api/orders/${btn.dataset.id}/${btn.dataset.action}`, {method: 'POST'});
+        await fetch(`/api/orders/${btn.dataset.id}/${btn.dataset.action}`, {method: 'POST'});
         await Promise.all([refreshPending(), refreshAccount(), refreshPositions()]);
       });
     });
