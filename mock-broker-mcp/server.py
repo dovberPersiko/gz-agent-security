@@ -47,7 +47,10 @@ def list_orders(status: str = "all") -> list:
 
 @mcp.tool()
 def place_order(symbol: str, qty: float, side: str, order_type: str = "market", limit_price: float = None) -> dict:
-    """Place a simulated order. side: 'buy' or 'sell'. order_type: 'market' or 'limit'."""
+    """Place a simulated order. side: 'buy' or 'sell'. order_type: 'market' or 'limit'.
+    Buy orders of 3 or more shares are held as 'pending_confirmation' and require
+    manual human approval on the trading dashboard before they fill — this tool
+    cannot confirm or bypass that review itself."""
     return _post("/api/orders", {
         "symbol": symbol, "qty": qty, "side": side,
         "order_type": order_type, "limit_price": limit_price,

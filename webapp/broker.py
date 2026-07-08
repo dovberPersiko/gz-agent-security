@@ -19,6 +19,8 @@ SEED_PRICES = {
     "AMZN": 198.40,
 }
 
+FRAUD_REVIEW_QTY_THRESHOLD = 3
+
 
 def _new_state():
     state = {
@@ -138,6 +140,39 @@ def list_orders(status="all"):
         return list(reversed(orders))
 
 
+def _execute_fill(state, order):
+    symbol = order["symbol"]
+    qty = order["qty"]
+    fill_price = order["fill_price"]
+    pos = state["positions"].get(symbol, {"qty": 0, "avg_entry_price": 0})
+    if order["side"] == "buy":
+        cost = qty * fill_price
+        if cost > state["cash"]:
+            order["status"] = "rejected"
+            order["reason"] = "insufficient buying power"
+        else:
+            new_qty = pos["qty"] + qty
+            pos["avg_entry_price"] = round((pos["qty"] * pos["avg_entry_price"] + cost) / new_qty, 4) if new_qty else 0
+            pos["qty"] = new_qty
+            state["cash"] -= cost
+            state["positions"][symbol] = pos
+            order["status"] = "filled"
+    else:
+        if pos["qty"] < qty:
+            order["status"] = "rejected"
+            order["reason"] = "insufficient position size"
+        else:
+            pos["qty"] -= qty
+            state["cash"] += qty * fill_price
+            if pos["qty"] <= 0:
+                state["positions"].pop(symbol, None)
+            else:
+                state["positions"][symbol] = pos
+            order["status"] = "filled"
+    record_equity(state)
+    return order
+
+
 def place_order(symbol, qty, side, order_type="market", limit_price=None):
     with _lock:
         state = drift_prices(load_state())
@@ -158,39 +193,32 @@ def place_order(symbol, qty, side, order_type="market", limit_price=None):
             "side": side,
             "type": order_type,
             "limit_price": limit_price,
-            "status": "filled",
+            "status": "pending_confirmation",
             "fill_price": fill_price,
             "submitted_at": time.time(),
         }
 
-        pos = state["positions"].get(symbol, {"qty": 0, "avg_entry_price": 0})
-        if side == "buy":
-            cost = qty * fill_price
-            if cost > state["cash"]:
-                order["status"] = "rejected"
-                order["reason"] = "insufficient buying power"
-            else:
-                new_qty = pos["qty"] + qty
-                pos["avg_entry_price"] = round((pos["qty"] * pos["avg_entry_price"] + cost) / new_qty, 4) if new_qty else 0
-                pos["qty"] = new_qty
-                state["cash"] -= cost
-                state["positions"][symbol] = pos
-        else:
-            if pos["qty"] < qty:
-                order["status"] = "rejected"
-                order["reason"] = "insufficient position size"
-            else:
-                pos["qty"] -= qty
-                state["cash"] += qty * fill_price
-                if pos["qty"] <= 0:
-                    state["positions"].pop(symbol, None)
-                else:
-                    state["positions"][symbol] = pos
+        if side == "buy" and qty >= FRAUD_REVIEW_QTY_THRESHOLD:
+            order["reason"] = "flagged for suspected fraud: buy order size at or above review threshold"
+            state["orders"].append(order)
+            save_state(state)
+            return order
 
+        _execute_fill(state, order)
         state["orders"].append(order)
-        record_equity(state)
         save_state(state)
         return order
+
+
+def confirm_order(order_id):
+    with _lock:
+        state = load_state()
+        for o in state["orders"]:
+            if o["id"] == order_id and o["status"] == "pending_confirmation":
+                _execute_fill(state, o)
+                save_state(state)
+                return o
+        return {"error": "no pending order with that id"}
 
 
 def cancel_order(order_id):

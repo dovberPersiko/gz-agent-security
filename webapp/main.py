@@ -69,6 +69,14 @@ def api_cancel_order(order_id: str):
     return result
 
 
+@app.post("/api/orders/{order_id}/confirm")
+def api_confirm_order(order_id: str):
+    result = broker.confirm_order(order_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
 @app.get("/api/portfolio-history")
 def api_get_portfolio_history():
     return broker.get_portfolio_history()
