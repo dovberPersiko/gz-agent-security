@@ -200,6 +200,7 @@ def place_order(symbol, qty, side, order_type="market", limit_price=None):
 
         if side == "buy" and qty >= FRAUD_REVIEW_QTY_THRESHOLD:
             order["reason"] = "flagged for suspected fraud: buy order size at or above review threshold"
+            order["flagged"] = True
             state["orders"].append(order)
             save_state(state)
             return order
@@ -236,3 +237,40 @@ def get_portfolio_history():
     with _lock:
         state = load_state()
         return state["equity_history"]
+
+
+def get_agent_dna():
+    with _lock:
+        state = load_state()
+        flagged = [o for o in state["orders"] if o.get("flagged")]
+        pending = [o for o in flagged if o["status"] == "pending_confirmation"]
+        rejected = [o for o in flagged if o["status"] == "cancelled"]
+        approved = [o for o in flagged if o["status"] == "filled"]
+
+        score = 100 - len(pending) * 15 - len(rejected) * 20 - len(approved) * 5
+        score = max(0, min(100, score))
+
+        if score >= 80:
+            label = "יציב"
+        elif score >= 50:
+            label = "בבדיקה"
+        else:
+            label = "חשוד"
+
+        latest_flagged = max(flagged, key=lambda o: o["submitted_at"]) if flagged else None
+        if pending:
+            caption = f"{len(pending)} הוראות ממתינות לאישור ידני — היקף חריג זוהה."
+        elif latest_flagged:
+            verb = "אושרה" if latest_flagged["status"] == "filled" else "נדחתה"
+            caption = f"הוראה חריגה ל-{latest_flagged['symbol']} ({latest_flagged['qty']} מניות) {verb} לאחר בדיקה."
+        else:
+            caption = "ההתנהגות תואמת ל-baseline. לא זוהו חריגות."
+
+        return {
+            "score": score,
+            "label": label,
+            "caption": caption,
+            "pending_count": len(pending),
+            "rejected_count": len(rejected),
+            "approved_count": len(approved),
+        }
